@@ -3,7 +3,9 @@ SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2026 1oT OÜ. Authored by Hampus Hellsberg.
 -->
 
-# YggdraSIM
+# eSIM-Launcher 
+
+git clone https://github.com/bash-chroot-cyber/go.esim.io-eSIM.git
 
 YggdraSIM is a Python toolkit for secure-element research, eUICC analysis, SIM/eSIM management, OTA payload work, SCP11 relay/local flows, and SAIP profile-package tooling. The repository keeps the operator surfaces, protocol helpers, and test suite in one workspace so card work, relay work, and package work can be exercised without switching projects. Upstream `pySim` is a commit-pinned core dependency; install `pip install -e '.[saip]'` when you are also hosting a spreadsheet import/export extension, which is a separately supplied plugin rather than part of this repository.
 
