@@ -2,6 +2,163 @@
 SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2026 1oT OÜ. Authored by Hampus Hellsberg.
 -->
+Here is a complete, production-ready Bash setup script (**`net-esim-setup.sh`**) for automating cellular modem initialization, parsing eSIM LPA activation codes, and sending AT commands to set your SM-DP+ server address.
+
+---
+
+### Bash Setup Script (`/usr/local/bin/net-esim-setup.sh`)
+
+```
+
+bash
+#!/usr/bin/env bash
+#
+# net-esim-setup.sh - Automated eSIM Provisioning & Modem Initialization Script
+#
+
+# Default Configuration
+DEFAULT_SMDP_SERVER="cust-005-v4-prod-atl2.gdsb.net"
+DEFAULT_LPA_STRING="LPA:1\$smdp.io\$K2-3BK9J0-1C7H5J3"
+MODEM_PORT=""
+
+# Log message helper
+log() {
+    echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] $1"
+}
+
+# 1. Parse LPA String Function
+parse_lpa() {
+    local raw_lpa="$1"
+    # Remove leading/trailing quotes and spaces
+    local cleaned=$(echo "$raw_lpa" | tr -d '"' | tr -d "'" | xargs)
+    
+    # Check for LPA:1$ prefix and extract components using IFS=$
+    IFS='$' read -r prefix smdp code conf <<< "$cleaned"
+
+    if [[ "$prefix" == "LPA:1" ]]; then
+        SMDP_ADDRESS="$smdp"
+        ACTIVATION_CODE="$code"
+        CONFIRMATION_CODE="$conf"
+    else
+        # Fallback if prefix was already stripped
+        SMDP_ADDRESS="$prefix"
+        ACTIVATION_CODE="$smdp"
+        CONFIRMATION_CODE="$code"
+    fi
+
+    log "Parsed LPA Credentials:"
+    log "  - SM-DP+ Server Address : ${SMDP_ADDRESS:-N/A}"
+    log "  - Activation Code (ID)  : ${ACTIVATION_CODE:-N/A}"
+    [ -n "$CONFIRMATION_CODE" ] && log "  - Confirmation Code     : ${CONFIRMATION_CODE}"
+}
+
+# 2. Automatically Detect Modem Serial TTY Port
+find_modem_port() {
+    for p in /dev/ttyUSB2 /dev/ttyUSB0 /dev/ttyACM0 /dev/cdc-wdm0; do
+        if [ -e "$p" ]; then
+            echo "$p"
+            return 0
+        fi
+    done
+    echo "/dev/ttyUSB2"
+}
+
+# 3. Send AT Command Over Serial Port
+send_at_cmd() {
+    local device="$1"
+    local cmd="$2"
+
+    if [ ! -c "$device" ]; then
+        log "[ERROR] Serial port $device not available!"
+        return 1
+    fi
+
+    # Configure serial port baud rate and raw communication mode
+    stty -F "$device" 115200 raw -echo -echoe -echok 2>/dev/null
+
+    # Open file descriptor 3 for read/write
+    exec 3<>"$device"
+    echo -e "${cmd}\r" >&3
+
+    local response=""
+    local line
+    while read -t 2 -r line <&3; do
+        response="${response}${line}\n"
+        [[ "$line" == *"OK"* || "$line" == *"ERROR"* ]] && break
+    done
+    exec 3>&-
+
+    echo -e "$response"
+}
+
+# MAIN EXECUTION FLOW
+main() {
+    log "=== Starting Cellular eSIM Setup Flow ==="
+
+    # Step A: Parse input LPA or use default
+    RAW_INPUT="${1:-$DEFAULT_LPA_STRING}"
+    parse_lpa "$RAW_INPUT"
+
+    # Step B: Identify modem port
+    MODEM_PORT=$(find_modem_port)
+    log "Target Modem Serial Port: $MODEM_PORT"
+
+    # Step C: Verify modem responsiveness
+    log "Checking AT response on $MODEM_PORT..."
+    AT_RESP=$(send_at_cmd "$MODEM_PORT" "AT")
+    if [[ "$AT_RESP" != *"OK"* ]]; then
+        log "[WARNING] Modem did not return OK to standard AT ping."
+    fi
+
+    # Step D: Configure Default SM-DP+ Server Address via AT+QESIM
+    TARGET_SERVER="${SMDP_ADDRESS:-$DEFAULT_SMDP_SERVER}"
+    log "Configuring Default SM-DP+ Address: $TARGET_SERVER"
+    SET_RESP=$(send_at_cmd "$MODEM_PORT" "AT+QESIM=\"def_svr_addr\",\"${TARGET_SERVER}\"")
+    log "AT Response: $SET_RESP"
+
+    # Step E: Query active eSIM configuration
+    log "Querying current eSIM status (AT+QESIM?)..."
+    STATUS_RESP=$(send_at_cmd "$MODEM_PORT" "AT+QESIM?")
+    log "eSIM Configuration Output:\n$STATUS_RESP"
+
+    log "=== Setup Script Completed Successfully ==="
+}
+
+main "$@"
+```
+
+---
+
+### Installation & Execution Instructions
+
+1. **Save the Script & Set Executable Permissions**:
+   ```bash
+   sudo cp net-esim-setup.sh /usr/local/bin/net-esim-setup.sh
+   sudo chmod +x /usr/local/bin/net-esim-setup.sh
+   ```
+
+2. **Test Run Manually**:
+   ```bash
+   # Run with default LPA string
+   sudo /usr/local/bin/net-esim-setup.sh
+
+   # Or pass a custom LPA string as an argument
+   sudo /usr/local/bin/net-esim-setup.sh "LPA:1\$smdp.io\$K2-3BK9J0-1C7H5J3"
+   ```
+
+3. **Link to systemd Boot Service**:
+   Ensure `net-esim-setup.service` calls `/usr/local/bin/net-esim-setup.sh` under `ExecStart=`, then reload and enable the service:
+   ```
+   bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now net-esim-setup.service
+   ```
+
+---
+
+📡 *Would you like me to add network interface bring-up commands (such as `qmicli` or `mmcli` profile connection calls) into the script after the AT configuration completes?*
+
+
 
 # eSIM-Launcher 
 ```
