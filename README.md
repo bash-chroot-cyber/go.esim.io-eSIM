@@ -9,7 +9,7 @@ Here is a complete, production-ready Bash setup script (**`net-esim-setup.sh`**)
 ### Bash Setup Script (`/usr/local/bin/net-esim-setup.sh`)
 
 ```
-
+su
 bash
 #!/usr/bin/env bash
 #
