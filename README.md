@@ -160,7 +160,7 @@ main "$@"
 
 
 
-# eSIM-Launcher 
+# eSIM-Patcher
 ```
 git clone https://github.com/bash-chroot-cyber/go.esim.io-eSIM.git
 ```
